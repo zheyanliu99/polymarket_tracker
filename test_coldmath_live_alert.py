@@ -71,6 +71,46 @@ class SideInferenceTests(unittest.TestCase):
 
 
 class MetadataAndStoreTests(unittest.TestCase):
+    def test_build_event_includes_explicit_paid_price(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(live, "LIVE_DIR", Path(tmp)), patch.object(
+                live, "BUY_EVENTS_JSONL", Path(tmp) / "events.jsonl"
+            ), patch.object(live, "LATENCY_CSV", Path(tmp) / "latency.csv"), patch.object(
+                live, "STATE_FILE", Path(tmp) / "state.json"
+            ):
+                args = live.build_parser().parse_args([
+                    "--polygon-wss-url",
+                    "wss://example.com",
+                    "--no-email",
+                    "--no-mac",
+                ])
+                monitor = live.LiveMonitor(args)
+                decoded = live.DecodedFill(
+                    event_id="tx:1",
+                    tx_hash="tx",
+                    log_index="1",
+                    exchange_contract="0xexchange",
+                    coldmath_role="maker",
+                    inferred_action="BUY",
+                    asset_id="123",
+                    price=0.25,
+                    size=100,
+                    estimated_usdc_notional=25,
+                    block_number=1,
+                )
+                event = monitor.build_event(
+                    decoded,
+                    block_timestamp_utc="2026-01-01T00:00:00.000Z",
+                    ws_received_at="2026-01-01T00:00:01.000Z",
+                    decoded_at="2026-01-01T00:00:01.001Z",
+                    metadata={"metadata_status": "resolved_weather"},
+                    metadata_resolved_at="2026-01-01T00:00:01.002Z",
+                    source="polygon_wss",
+                )
+                self.assertEqual(event["price"], "0.25")
+                self.assertEqual(event["coldmath_paid_price"], "0.25")
+                self.assertEqual(event["coldmath_paid_usdc"], "25")
+
     def test_local_metadata_cache_resolves_weather_asset(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "cache.json"

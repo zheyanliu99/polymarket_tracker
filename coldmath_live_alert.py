@@ -62,7 +62,9 @@ CSV_FIELDS = [
     "title",
     "market_url",
     "price",
+    "coldmath_paid_price",
     "size",
+    "coldmath_paid_usdc",
     "estimated_usdc_notional",
     "block_number",
     "block_timestamp_utc",
@@ -706,8 +708,9 @@ class Notifier:
         updates: dict[str, Any] = {}
         title = event.get("title") or "Unknown Polymarket market"
         body = (
-            f"{event.get('outcome') or 'Unknown outcome'} at {format_float(event.get('price'))} "
-            f"for ${format_float(event.get('estimated_usdc_notional'))}"
+            f"{event.get('outcome') or 'Unknown outcome'} at "
+            f"{format_float(event.get('coldmath_paid_price') or event.get('price'))} "
+            f"for ${format_float(event.get('coldmath_paid_usdc') or event.get('estimated_usdc_notional'))}"
         )
         if self.enable_mac:
             try:
@@ -777,7 +780,10 @@ class Notifier:
             return "email_skipped_missing_env"
 
         message = EmailMessage()
-        message["Subject"] = f"ColdMath BUY: {event.get('outcome') or ''} {event.get('price')}"
+        message["Subject"] = (
+            f"ColdMath BUY: {event.get('outcome') or ''} "
+            f"{event.get('coldmath_paid_price') or event.get('price')}"
+        )
         message["From"] = os.environ["SMTP_FROM"]
         message["To"] = recipient
         message.set_content(render_email_body(event))
@@ -808,9 +814,9 @@ def render_email_body(event: dict[str, Any]) -> str:
         "",
         f"Market: {event.get('title')}",
         f"Outcome: {event.get('outcome')}",
-        f"Price: {event.get('price')}",
+        f"ColdMath paid price: {event.get('coldmath_paid_price') or event.get('price')}",
         f"Size: {event.get('size')}",
-        f"Estimated USDC notional: {event.get('estimated_usdc_notional')}",
+        f"ColdMath paid USDC: {event.get('coldmath_paid_usdc') or event.get('estimated_usdc_notional')}",
         f"Role: {event.get('coldmath_role')}",
         f"Market URL: {event.get('market_url')}",
         f"Tx: https://polygonscan.com/tx/{event.get('tx_hash')}",
@@ -1024,7 +1030,9 @@ class LiveMonitor:
             "title": metadata.get("title", ""),
             "market_url": metadata.get("market_url", ""),
             "price": f"{decoded.price:.8g}",
+            "coldmath_paid_price": f"{decoded.price:.8g}",
             "size": f"{decoded.size:.8g}",
+            "coldmath_paid_usdc": f"{decoded.estimated_usdc_notional:.8g}",
             "estimated_usdc_notional": f"{decoded.estimated_usdc_notional:.8g}",
             "block_number": decoded.block_number,
             "block_timestamp_utc": block_timestamp_utc,
@@ -1114,7 +1122,9 @@ class LiveMonitor:
             "title": row.get("title") or "",
             "market_url": market_url,
             "price": f"{price:.8g}",
+            "coldmath_paid_price": f"{price:.8g}",
             "size": f"{size:.8g}",
+            "coldmath_paid_usdc": f"{notional:.8g}",
             "estimated_usdc_notional": f"{notional:.8g}",
             "block_number": "",
             "block_timestamp_utc": block_timestamp,
@@ -1177,7 +1187,9 @@ class LiveMonitor:
                 "title": "Test ColdMath alert",
                 "market_url": "https://polymarket.com",
                 "price": "0.01",
+                "coldmath_paid_price": "0.01",
                 "size": "1",
+                "coldmath_paid_usdc": "0.01",
                 "estimated_usdc_notional": "0.01",
                 "block_timestamp_utc": now,
                 "ws_received_at_utc": now,
@@ -1192,7 +1204,8 @@ class LiveMonitor:
     def print_detection(self, event: dict[str, Any]) -> None:
         print(
             f"[{utc_now_iso()}] ColdMath BUY {event.get('outcome') or ''} "
-            f"price={event.get('price')} notional=${event.get('estimated_usdc_notional')} "
+            f"paid_price={event.get('coldmath_paid_price') or event.get('price')} "
+            f"paid_usdc=${event.get('coldmath_paid_usdc') or event.get('estimated_usdc_notional')} "
             f"lag_ms={event.get('detect_lag_ms')} {event.get('market_url') or event.get('tx_hash')}",
             flush=True,
         )
