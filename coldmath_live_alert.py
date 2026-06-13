@@ -798,7 +798,7 @@ class Notifier:
 
 
 def apple_string(value: str) -> str:
-    return json.dumps(value)
+    return json.dumps(value, ensure_ascii=False)
 
 
 def format_float(value: Any) -> str:
@@ -918,12 +918,17 @@ class LiveMonitor:
                 and now_mono - self.last_block_seen_monotonic > self.args.stale_seconds
             )
             if stale:
+                seconds_since_last_block = now_mono - self.last_block_seen_monotonic
                 self.logger.log(
                     "wss_stale",
-                    seconds_since_last_block=round(now_mono - self.last_block_seen_monotonic, 3),
+                    seconds_since_last_block=round(seconds_since_last_block, 3),
                     latest_block_number=self.latest_block_number,
                 )
                 self.poll_fallback_if_due(force=True)
+                raise WebSocketError(
+                    f"WSS stale for {seconds_since_last_block:.3f}s after block "
+                    f"{self.latest_block_number}; reconnecting"
+                )
             message = rpc.recv(timeout=1.0)
             if message is None:
                 continue

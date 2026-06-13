@@ -1,4 +1,5 @@
 import json
+import time
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +72,28 @@ class SideInferenceTests(unittest.TestCase):
 
 
 class MetadataAndStoreTests(unittest.TestCase):
+    def test_apple_string_preserves_degree_symbol_for_osascript(self):
+        self.assertEqual(live.apple_string("72-73°F"), '"72-73°F"')
+
+    def test_loop_connected_reconnects_when_wss_stale(self):
+        args = live.build_parser().parse_args([
+            "--polygon-wss-url",
+            "wss://example.com",
+            "--no-email",
+            "--no-mac",
+        ])
+        monitor = live.LiveMonitor(args)
+        monitor.metadata.last_gamma_refresh_monotonic = time.monotonic()
+        monitor.last_block_seen_monotonic = time.monotonic() - args.stale_seconds - 1
+        monitor.latest_block_number = 123
+
+        with patch.object(monitor, "emit_heartbeat_if_due"), patch.object(
+            monitor, "poll_fallback_if_due"
+        ) as fallback:
+            with self.assertRaises(live.WebSocketError):
+                monitor.loop_connected(object())
+            fallback.assert_called_once_with(force=True)
+
     def test_build_event_includes_explicit_paid_price(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(live, "LIVE_DIR", Path(tmp)), patch.object(
