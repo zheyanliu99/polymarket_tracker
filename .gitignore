@@ -1,0 +1,8 @@
+.coldmath_seen.json
+__pycache__/
+*.partial.json
+.env
+.env.*
+!.env.example
+*.csv
+data/
