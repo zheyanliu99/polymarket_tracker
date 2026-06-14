@@ -26,6 +26,7 @@ python3 coldmath_tracker.py recent --trades-only --limit 100 --csv coldmath_weat
 
 `coldmath_live_alert.py` watches Polygon `OrderFilled` logs for ColdMath buys and writes latency audit logs under `data/live/`.
 For each buy, `price` and `coldmath_paid_price` are computed from the on-chain fill as USDC paid divided by outcome tokens received.
+It also polls the Polymarket Data API as a continuous safety net so current buys are still logged if a provider misses a WSS log.
 
 Required:
 

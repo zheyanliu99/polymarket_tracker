@@ -31,7 +31,9 @@ from urllib.request import Request, urlopen
 
 COLDMATH_WALLET = "0x594edb9112f526fa6a80b8f858a6379c8a2c1c11"
 COLDMATH_TOPIC = "0x" + "0" * 24 + COLDMATH_WALLET[2:].lower()
-ORDER_FILLED_TOPIC = "0xd0a08e8c493f9c94f29311604c9de1b4e8c8d4c06bd0c789af57f2d65bfec0f6"
+ORDER_FILLED_TOPIC = "0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee"
+LEGACY_ORDER_FILLED_TOPIC = "0xd0a08e8c493f9c94f29311604c9de1b4e8c8d4c06bd0c789af57f2d65bfec0f6"
+ORDER_FILLED_TOPICS = [ORDER_FILLED_TOPIC, LEGACY_ORDER_FILLED_TOPIC]
 PUSD_SCALE = 1_000_000
 DATA_API = "https://data-api.polymarket.com"
 GAMMA_API = "https://gamma-api.polymarket.com"
@@ -433,7 +435,7 @@ class DecodedFill:
 
 def decode_log(log: dict[str, Any], role_hint: str | None = None) -> DecodedFill:
     topics = [topic.lower() for topic in log.get("topics", [])]
-    if len(topics) < 4 or topics[0] != ORDER_FILLED_TOPIC:
+    if len(topics) < 4 or topics[0] not in ORDER_FILLED_TOPICS:
         raise ValueError("not an OrderFilled log")
     maker = topic_to_address(topics[2])
     taker = topic_to_address(topics[3])
@@ -884,8 +886,8 @@ class LiveMonitor:
         self.subscription_roles[head_id] = {"type": "newHeads"}
         for exchange_name, address in EXCHANGES.items():
             for role, topics in {
-                "maker": [ORDER_FILLED_TOPIC, None, COLDMATH_TOPIC, None],
-                "taker": [ORDER_FILLED_TOPIC, None, None, COLDMATH_TOPIC],
+                "maker": [ORDER_FILLED_TOPICS, None, COLDMATH_TOPIC, None],
+                "taker": [ORDER_FILLED_TOPICS, None, None, COLDMATH_TOPIC],
             }.items():
                 sub_id = rpc.request(
                     "eth_subscribe",
@@ -929,6 +931,7 @@ class LiveMonitor:
                     f"WSS stale for {seconds_since_last_block:.3f}s after block "
                     f"{self.latest_block_number}; reconnecting"
                 )
+            self.poll_fallback_if_due()
             message = rpc.recv(timeout=1.0)
             if message is None:
                 continue
@@ -1085,8 +1088,8 @@ class LiveMonitor:
             return
         self.last_data_api_poll_monotonic = now_mono
         try:
-            params = urlencode({"user": COLDMATH_WALLET, "limit": 10})
-            rows = request_json_url(f"{DATA_API}/activity?{params}", timeout=8)
+            params = urlencode({"user": COLDMATH_WALLET, "limit": self.args.data_api_limit})
+            rows = request_json_url(f"{DATA_API}/activity?{params}", timeout=8 if force else 2)
         except (HTTPError, URLError, TimeoutError, ValueError) as exc:
             self.logger.log("data_api_fallback_error", error=str(exc))
             return
@@ -1236,6 +1239,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--heartbeat-seconds", type=int, default=60)
     parser.add_argument("--stale-seconds", type=int, default=15)
     parser.add_argument("--fallback-poll-seconds", type=int, default=2)
+    parser.add_argument("--data-api-limit", type=int, default=50)
     parser.add_argument("--gamma-refresh-seconds", type=int, default=60)
     parser.add_argument("--no-email", action="store_true")
     parser.add_argument("--no-mac", action="store_true")
